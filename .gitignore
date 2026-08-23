@@ -1,1 +1,30 @@
-avoids pychache_ and audit.traildb
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# --- Virtual environments ---
+venv/
+env/
+.venv/
+
+# --- SQLite audit trail (auto-generated at runtime, never commit) ---
+audit_trail.db
+*.db
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- Editor/IDE ---
+.vscode/
+.idea/
+
+# --- Node / frontend (if using the React/JS side) ---
+node_modules/
+dist/
+build/
+.env
