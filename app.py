@@ -7,9 +7,12 @@ Run with:  streamlit run app.py
 
 import streamlit as st
 import core
+import style
+import ai_engine
 
 st.set_page_config(page_title="Self-Healing AI Ops Controller", layout="wide")
 core.init_db()
+st.markdown(style.inject_css(len(core.DEVICES)), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # SESSION STATE INIT
@@ -25,66 +28,106 @@ if "disabled_sources" not in st.session_state:
 if "resolved_msgs" not in st.session_state:
     st.session_state.resolved_msgs = []
 
-st.title("🛠️ Self-Healing AI Operations Controller")
-st.caption("Prototype — Campus Digital & Physical Infrastructure  |  SOAIDEATHON-S3")
+
+def _clear_ai_state(fault_key):
+    """Drop any cached AI narration tied to a fault_key (new incident or resolved incident)."""
+    st.session_state.pop(f"ai_diag_{fault_key}", None)
+    for k in list(st.session_state.keys()):
+        if k.startswith(f"ai_action_{fault_key}_"):
+            del st.session_state[k]
+
+
+AI_ON = ai_engine.ai_available()
 
 # ---------------------------------------------------------------------------
-# SIDEBAR — controls
+# HEADER
+# ---------------------------------------------------------------------------
+callsign_cls = "" if AI_ON else "dim"
+callsign_txt = "🤖 AI NARRATION — ONLINE" if AI_ON else "🤖 AI NARRATION — OFFLINE (rule engine only)"
+st.markdown(
+    f"""
+<div class="ops-header">
+  <div>
+    <p class="ops-title">🛠️ Self-Healing AI Operations Controller</p>
+    <p class="ops-sub">NODE: CAMPUS-01 &nbsp;·&nbsp; Digital &amp; Physical Infrastructure &nbsp;·&nbsp; SOAIDEATHON-S3 prototype</p>
+  </div>
+  <div class="ops-callsign {callsign_cls}">{callsign_txt}</div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# SIDEBAR — control deck
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.header("Controls")
-
-    st.subheader("1. Inject Faults")
+    st.markdown('<div class="deck-eyebrow">STEP 01 — INJECT FAULT</div>', unsafe_allow_html=True)
     st.caption("You can inject several at once — each is diagnosed and resolved independently.")
     fault_options = {v["label"]: k for k, v in core.FAULT_LIBRARY.items()}
-    chosen_label = st.selectbox("Choose a fault to simulate", list(fault_options.keys()))
+    chosen_label = st.selectbox("Choose a fault to simulate", list(fault_options.keys()), label_visibility="collapsed")
     if st.button("🔥 Inject Fault", use_container_width=True):
         fault_key = fault_options[chosen_label]
         core.FAULT_LIBRARY[fault_key]["apply"](st.session_state.devices)
         if fault_key not in st.session_state.active_faults:
             st.session_state.active_faults.append(fault_key)
         st.session_state.diagnoses.pop(fault_key, None)
+        _clear_ai_state(fault_key)
         core.log_event("FAULT_DETECTED", f"{core.FAULT_LIBRARY[fault_key]['label']} detected.")
         st.rerun()
 
     if st.session_state.active_faults:
-        st.caption(f"Active faults: {len(st.session_state.active_faults)}")
+        st.caption(f"⬤ Active faults: {len(st.session_state.active_faults)}")
 
-    st.divider()
-    st.subheader("2. Graceful Degradation")
-    st.caption("Simulate a data source going offline — diagnosis should still run, "
-               "just with lower confidence.")
+    st.markdown('<div class="deck-eyebrow">STEP 02 — DEGRADE SENSORS</div>', unsafe_allow_html=True)
+    st.caption("Simulate a data source going offline — diagnosis should still run, just with lower confidence.")
     all_sources = core.DEVICES
-    disabled = st.multiselect("Mark these sensors/services as OFFLINE",
-                               all_sources,
-                               default=list(st.session_state.disabled_sources))
+    disabled = st.multiselect(
+        "Mark these sensors/services as OFFLINE",
+        all_sources,
+        default=list(st.session_state.disabled_sources),
+        label_visibility="collapsed",
+    )
     st.session_state.disabled_sources = set(disabled)
 
-    st.divider()
+    st.markdown('<div class="deck-eyebrow">STEP 03 — RESET</div>', unsafe_allow_html=True)
     if st.button("♻️ Reset Everything", use_container_width=True):
         st.session_state.devices = core.default_state()
         st.session_state.active_faults = []
         st.session_state.diagnoses = {}
         st.session_state.disabled_sources = set()
         st.session_state.resolved_msgs = []
+        for k in list(st.session_state.keys()):
+            if k.startswith("ai_diag_") or k.startswith("ai_action_"):
+                del st.session_state[k]
         core.clear_audit_log()
         st.rerun()
+
+    st.markdown('<div class="deck-eyebrow">AI NARRATION MODE</div>', unsafe_allow_html=True)
+    if AI_ON:
+        st.caption(
+            f"Model: `{ai_engine.MODEL}`. Diagnosis and root cause always come from the "
+            f"rule engine — AI narration is opt-in per incident (button), never automatic, "
+            f"so the demo stays fast and deterministic."
+        )
+    else:
+        st.caption(
+            f"Rule engine is fully operational without it. To enable AI narration, set the "
+            f"`ANTHROPIC_API_KEY` environment variable before launching "
+            f"({ai_engine.unavailable_reason()})."
+        )
 
 # ---------------------------------------------------------------------------
 # TOP ROW — live device status
 # ---------------------------------------------------------------------------
 st.subheader("📡 Live Campus Infrastructure Status")
-cols = st.columns(len(core.DEVICES))
-status_icon = {"OK": "🟢", "DEGRADED": "🟠", "CRITICAL": "🔴", "DOWN": "🔴"}
-
-for col, dev in zip(cols, core.DEVICES):
-    d = st.session_state.devices[dev]
-    offline_tag = " (OFFLINE — no data)" if dev in st.session_state.disabled_sources else ""
-    with col:
-        st.metric(
-            label=f"{status_icon.get(d['status'], '⚪')} {dev.replace('_', ' ').title()}",
-            value=d["status"] + offline_tag,
-        )
+readings = core.snapshot_readings(st.session_state.devices)
+tiles_html = '<div class="tile-grid">'
+for dev in core.DEVICES:
+    meta = core.DEVICE_META[dev]
+    offline = dev in st.session_state.disabled_sources
+    tiles_html += style.device_tile(dev, meta, readings[dev], offline)
+tiles_html += "</div>"
+st.markdown(tiles_html, unsafe_allow_html=True)
 
 st.divider()
 
@@ -97,14 +140,17 @@ if st.session_state.resolved_msgs:
 # ONE CARD PER ACTIVE FAULT — each diagnosed and resolved independently
 # ---------------------------------------------------------------------------
 if not st.session_state.active_faults:
-    st.info("No active faults. Inject one (or several) from the sidebar to see the AI diagnose them.")
+    st.info("No active faults. Inject one (or several) from the control deck to see the AI diagnose them.")
 else:
     st.subheader(f"🚨 Active Incidents ({len(st.session_state.active_faults)})")
 
     for fault_key in list(st.session_state.active_faults):
         fault_meta = core.FAULT_LIBRARY[fault_key]
+        root_dev = fault_meta["root_cause"]
+        root_status = st.session_state.devices[root_dev]["status"]
+        st.markdown(style.severity_strip(fault_meta["label"], root_status), unsafe_allow_html=True)
+
         with st.container(border=True):
-            st.markdown(f"### {fault_meta['label']}")
             left, right = st.columns([1, 1])
 
             with left:
@@ -126,14 +172,30 @@ else:
 
                 diag = st.session_state.diagnoses.get(fault_key)
                 if diag:
-                    conf_color = "🟢" if diag["confidence"] >= 80 else ("🟠" if diag["confidence"] >= 60 else "🔴")
                     st.markdown(f"**Likely Root Cause:** `{diag['root_cause']}`")
-                    st.markdown(f"**Confidence:** {conf_color} {diag['confidence']}%")
+                    st.markdown(style.confidence_gauge(diag["confidence"]), unsafe_allow_html=True)
                     if diag["degraded"]:
-                        st.warning("⚠️ Operating in degraded mode — some sensor data is unavailable. "
-                                   "Diagnosis confidence lowered accordingly.")
-                    st.markdown("**Evidence:**")
-                    st.write(diag["evidence"])
+                        st.warning(
+                            "⚠️ Operating in degraded mode — some sensor data is unavailable. "
+                            "Diagnosis confidence lowered accordingly."
+                        )
+                    st.markdown("**Rule-engine evidence:**")
+                    st.caption(diag["evidence"])
+
+                    ai_key = f"ai_diag_{fault_key}"
+                    if AI_ON:
+                        if st.button("🤖 Ask AI to explain this diagnosis", key=f"aibtn_{fault_key}"):
+                            text = ai_engine.explain_diagnosis(diag, readings, core.DEVICES)
+                            st.session_state[ai_key] = text if text else "__failed__"
+                            st.rerun()
+                        if ai_key in st.session_state:
+                            val = st.session_state[ai_key]
+                            if val != "__failed__":
+                                st.markdown(style.ai_block(val), unsafe_allow_html=True)
+                            else:
+                                st.markdown(style.ai_unavailable_note("the API call failed"), unsafe_allow_html=True)
+                    else:
+                        st.markdown(style.ai_unavailable_note(ai_engine.unavailable_reason()), unsafe_allow_html=True)
 
             with right:
                 st.markdown("**🧪 Recommended Playbook & Sandbox Preview**")
@@ -142,13 +204,25 @@ else:
                     st.info("Run a diagnosis first to see recommended fixes.")
                 else:
                     playbook = core.recommend(diag["fault_key"])
-                    risk_color = {"low": "🟢", "medium": "🟠", "high": "🔴"}
 
                     for i, action in enumerate(playbook):
                         with st.container(border=True):
-                            st.markdown(f"**Option {i+1}: {action['action']}**  "
-                                        f"{risk_color[action['risk']]} `{action['risk'].upper()} risk`")
+                            st.markdown(f"**Option {i + 1}: {action['action']}**")
+                            st.markdown(style.risk_badge(action["risk"]), unsafe_allow_html=True)
                             st.caption(f"🧪 Sandbox prediction: {core.sandbox_preview(action)}")
+
+                            if AI_ON:
+                                akey = f"ai_action_{fault_key}_{i}"
+                                if st.button("🤖 AI rationale", key=f"aiactbtn_{fault_key}_{i}"):
+                                    text = ai_engine.explain_action(fault_meta["label"], action, diag["degraded"])
+                                    st.session_state[akey] = text if text else "__failed__"
+                                    st.rerun()
+                                if akey in st.session_state:
+                                    val = st.session_state[akey]
+                                    if val != "__failed__":
+                                        st.markdown(style.ai_block(val), unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(style.ai_unavailable_note("the API call failed"), unsafe_allow_html=True)
 
                             c1, c2 = st.columns(2)
                             with c1:
@@ -164,6 +238,7 @@ else:
                                     )
                                     st.session_state.active_faults.remove(fault_key)
                                     st.session_state.diagnoses.pop(fault_key, None)
+                                    _clear_ai_state(fault_key)
                                     st.session_state.resolved_msgs.append(
                                         f"✅ [{fault_meta['label']}] '{action['action']}' executed. System restored."
                                     )
@@ -185,9 +260,4 @@ st.divider()
 st.subheader("📜 Audit Trail")
 st.caption("Immutable, timestamped log of every detection, diagnosis, approval, and rejection.")
 rows = core.get_audit_log()
-if rows:
-    st.table(
-        [{"Timestamp": r[0], "Event": r[1], "Detail": r[2]} for r in rows]
-    )
-else:
-    st.caption("No events logged yet.")
+st.markdown(style.audit_terminal(rows), unsafe_allow_html=True)

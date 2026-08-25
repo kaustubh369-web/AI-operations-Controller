@@ -15,6 +15,10 @@ env/
 audit_trail.db
 *.db
 
+# --- Secrets ---
+.streamlit/secrets.toml
+.env
+
 # --- OS junk ---
 .DS_Store
 Thumbs.db
@@ -27,4 +31,3 @@ Thumbs.db
 node_modules/
 dist/
 build/
-.env

@@ -28,6 +28,37 @@ DEPENDENCIES = {
     "power_grid": [],
 }
 
+# Display metadata for each device: which raw field is its headline reading,
+# what to call it, its unit, and a glyph for the control-room tile UI.
+# Purely cosmetic / presentational — never consulted by the correlation logic.
+DEVICE_META = {
+    "power_grid":  {"glyph": "⚡", "metric_key": "voltage",    "metric_label": "Voltage",     "unit": "V",  "kind": "physical"},
+    "wifi_router": {"glyph": "📡", "metric_key": "latency_ms", "metric_label": "Latency",     "unit": "ms", "kind": "digital"},
+    "database":    {"glyph": "🗄", "metric_key": "query_ms",   "metric_label": "Query time",  "unit": "ms", "kind": "digital"},
+    "web_server":  {"glyph": "🖥",  "metric_key": "cpu_pct",    "metric_label": "CPU load",    "unit": "%",  "kind": "digital"},
+    "hvac_sensor": {"glyph": "🌡", "metric_key": "temp_c",     "metric_label": "Temperature", "unit": "°C", "kind": "physical"},
+    "door_sensor": {"glyph": "🚪", "metric_key": "open_count", "metric_label": "Open events", "unit": "",   "kind": "physical"},
+}
+
+
+def snapshot_readings(state):
+    """
+    Flat, JSON-safe snapshot of every device's headline reading + status.
+    Used for (a) rendering the control-room tiles and (b) as the ONLY
+    telemetry payload ever handed to the AI narration layer, so the model
+    can't reach for data it wasn't given.
+    """
+    snap = {}
+    for dev, meta in DEVICE_META.items():
+        d = state[dev]
+        snap[dev] = {
+            "status": d["status"],
+            "reading": d.get(meta["metric_key"]),
+            "unit": meta["unit"],
+            "online": d.get("online", True),
+        }
+    return snap
+
 def default_state():
     """Fresh healthy state for all devices."""
     return {
