@@ -1,6 +1,0 @@
-streamlit>=1.30
-
-# Optional - only needed for the AI narration layer (ai_engine.py).
-# The app runs fully in rule-engine-only mode without it, or without
-# ANTHROPIC_API_KEY set; nothing else in the prototype depends on it.
-anthropic>=0.40.0
