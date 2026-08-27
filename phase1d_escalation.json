@@ -1,5 +1,5 @@
 {
-  "name": "LifeLine - Phase 1d - Escalation",
+  "name": "LifeLine - Phase 1d - Escalation (Telegram)",
   "nodes": [
     {
       "parameters": {
@@ -14,7 +14,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints?status=eq.open&select=*",
+        "url": "https://ksreqrxokmhrhcryflme.supabase.co/rest/v1/complaints?status=eq.open&select=*",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -65,21 +65,20 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v20.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $env.WARDEN_WHATSAPP_NUMBER }}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"\\u23F0 ESCALATION: {{ $json.location }} — {{ $json.category }} has been open {{ Math.floor($json.hoursOpen) }}h with no resolution.\\n{{ $json.description }}\\nAssigned to: {{ $json.assigned_to }}\" }\n}",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $env.WARDEN_TELEGRAM_CHAT_ID }}\",\n  \"text\": \"\\u23F0 ESCALATION: {{ $json.location }} — {{ $json.category }} has been open {{ Math.floor($json.hoursOpen) }}h with no resolution.\\n{{ $json.description }}\\nAssigned to: {{ $json.assigned_to }}\"\n}",
         "options": {}
       },
       "id": "2a222222-0000-4000-8000-000000000005",
-      "name": "WhatsApp Warden - Escalate",
+      "name": "Telegram Warden - Escalate",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [920, 220]
@@ -87,21 +86,20 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v20.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $env.MAINTENANCE_WHATSAPP_NUMBER }}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"\\u23F0 REMINDER: {{ $json.location }} — {{ $json.category }} still open after {{ Math.floor($json.hoursOpen) }}h.\\n{{ $json.description }}\\nReply DONE-{{ $json.id }} once fixed.\" }\n}",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $env.MAINTENANCE_TELEGRAM_CHAT_ID }}\",\n  \"text\": \"\\u23F0 REMINDER: {{ $json.location }} — {{ $json.category }} still open after {{ Math.floor($json.hoursOpen) }}h.\\n{{ $json.description }}\\nReply DONE-{{ $json.id }} once fixed.\"\n}",
         "options": {}
       },
       "id": "2a222222-0000-4000-8000-000000000006",
-      "name": "WhatsApp Maintenance - Remind",
+      "name": "Telegram Maintenance - Remind",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [920, 400]
@@ -109,7 +107,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "=https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints?id=eq.{{ $json.id }}",
+        "url": "=https://ksreqrxokmhrhcryflme.supabase.co/rest/v1/complaints?id=eq.{{ $json.id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -133,7 +131,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "=https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints?id=eq.{{ $json.id }}",
+        "url": "=https://ksreqrxokmhrhcryflme.supabase.co/rest/v1/complaints?id=eq.{{ $json.id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -161,12 +159,12 @@
     "Find Stale Complaints": { "main": [[{ "node": "Escalate or Remind?", "type": "main", "index": 0 }]] },
     "Escalate or Remind?": {
       "main": [
-        [{ "node": "WhatsApp Warden - Escalate", "type": "main", "index": 0 }],
-        [{ "node": "WhatsApp Maintenance - Remind", "type": "main", "index": 0 }]
+        [{ "node": "Telegram Warden - Escalate", "type": "main", "index": 0 }],
+        [{ "node": "Telegram Maintenance - Remind", "type": "main", "index": 0 }]
       ]
     },
-    "WhatsApp Warden - Escalate": { "main": [[{ "node": "Mark Escalated in Supabase", "type": "main", "index": 0 }]] },
-    "WhatsApp Maintenance - Remind": { "main": [[{ "node": "Mark Reminded in Supabase", "type": "main", "index": 0 }]] }
+    "Telegram Warden - Escalate": { "main": [[{ "node": "Mark Escalated in Supabase", "type": "main", "index": 0 }]] },
+    "Telegram Maintenance - Remind": { "main": [[{ "node": "Mark Reminded in Supabase", "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },

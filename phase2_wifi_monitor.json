@@ -29,7 +29,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints?category=eq.Network&source=eq.auto_monitor&status=neq.resolved&select=id",
+        "url": "https://ksreqrxokmhrhcryflme.supabase.co/rest/v1/complaints?category=eq.Network&source=eq.auto_monitor&status=neq.resolved&select=id",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -70,7 +70,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints",
+        "url": "https://ksreqrxokmhrhcryflme.supabase.co/rest/v1/complaints",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
