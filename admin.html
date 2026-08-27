@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LifeLine — Ops Console</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="brand" href="admin.html"><span class="dot"></span> LifeLine <span class="muted" style="font-size:0.7rem; font-family: var(--font-mono); margin-left: 6px;">OPS CONSOLE</span></a>
+  <div class="topnav">
+    <span id="who" class="muted"></span>
+    <a href="#" id="logout-link">Sign out</a>
+  </div>
+</div>
+
+<div class="container" style="padding-top: 40px; padding-bottom: 60px;">
+
+  <div class="card">
+    <div class="section-title">
+      All complaints
+      <span class="muted" style="font-size: 0.8rem; font-family: var(--font-mono);" id="count-label"></span>
+    </div>
+
+    <div class="filters">
+      <select id="filter-status" class="status-select">
+        <option value="">All statuses</option>
+        <option value="open">Open</option>
+        <option value="in_progress">In progress</option>
+        <option value="resolved">Resolved</option>
+      </select>
+      <select id="filter-priority" class="status-select">
+        <option value="">All priorities</option>
+        <option value="safety_critical">Safety critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+        <option value="unassigned">Unassigned / triaging</option>
+      </select>
+      <select id="filter-category" class="status-select">
+        <option value="">All categories</option>
+        <option>Electrical</option><option>Plumbing</option><option>Civil-Structural</option>
+        <option>Furniture</option><option>Network</option><option>Other</option>
+      </select>
+    </div>
+
+    <div class="complaint-row row-head">
+      <span>Priority</span><span>Issue &amp; location</span><span>Category</span><span>Status</span><span>Reported</span>
+    </div>
+    <div id="all-complaints"></div>
+    <div class="empty-state" id="empty-state" style="display:none;">Nothing matches these filters.</div>
+  </div>
+</div>
+
+<footer>LifeLine · AIOps for [Your Hostel Name] · Pilot phase</footer>
+
+<script src="config.js"></script>
+<script>
+let currentUser = null;
+let allRows = [];
+
+async function requireStaff() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) { window.location.href = 'index.html'; return; }
+  currentUser = session.user;
+
+  const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', currentUser.id).single();
+  if (!profile || (profile.role !== 'staff' && profile.role !== 'warden')) {
+    window.location.href = 'dashboard.html';
+    return;
+  }
+  document.getElementById('who').textContent = `${profile.full_name} · ${profile.role}`;
+  loadComplaints();
+}
+
+document.getElementById('logout-link').addEventListener('click', async (e) => {
+  e.preventDefault();
+  await supabaseClient.auth.signOut();
+  window.location.href = 'index.html';
+});
+
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+function priorityLabel(p) {
+  return { low: 'Low', medium: 'Medium', high: 'High', safety_critical: 'Safety critical', unassigned: 'Triaging…' }[p] || p;
+}
+
+async function loadComplaints() {
+  const { data, error } = await supabaseClient
+    .from('complaints')
+    .select('*, profiles(full_name, room_number, phone)')
+    .order('created_at', { ascending: false });
+  if (error) { document.getElementById('all-complaints').innerHTML = `<div class="form-error">${error.message}</div>`; return; }
+  allRows = data;
+  render();
+}
+
+async function updateStatus(id, newStatus) {
+  const patch = { status: newStatus };
+  if (newStatus === 'resolved') patch.resolved_at = new Date().toISOString();
+  await supabaseClient.from('complaints').update(patch).eq('id', id);
+  loadComplaints();
+}
+
+function render() {
+  const status = document.getElementById('filter-status').value;
+  const priority = document.getElementById('filter-priority').value;
+  const category = document.getElementById('filter-category').value;
+
+  const rows = allRows.filter(c =>
+    (!status || c.status === status) &&
+    (!priority || c.priority === priority) &&
+    (!category || c.category === category)
+  );
+
+  document.getElementById('count-label').textContent = `${rows.length} of ${allRows.length}`;
+  const wrap = document.getElementById('all-complaints');
+  wrap.innerHTML = '';
+  document.getElementById('empty-state').style.display = rows.length ? 'none' : 'block';
+
+  rows.forEach(c => {
+    const reporter = c.profiles ? `${c.profiles.full_name} · ${c.profiles.room_number}` : 'Auto-detected';
+    const row = document.createElement('div');
+    row.className = 'complaint-row';
+    row.innerHTML = `
+      <span class="tag tag-${c.priority}">${priorityLabel(c.priority)}</span>
+      <span>
+        ${c.photo_url ? `<img class="thumb" src="${c.photo_url}" style="margin-right:8px; vertical-align:middle;">` : ''}
+        <strong>${c.location}</strong><br>
+        <span class="muted" style="font-size:0.85rem;">${c.description}</span><br>
+        <span class="muted" style="font-size:0.78rem;">${reporter}${c.source === 'auto_monitor' ? ' · auto-detected' : ''}${c.escalated ? ' · escalated to warden' : ''}</span>
+      </span>
+      <span class="muted">${c.category}</span>
+      <span>
+        <select class="status-select" data-id="${c.id}">
+          <option value="open" ${c.status === 'open' ? 'selected' : ''}>Open</option>
+          <option value="in_progress" ${c.status === 'in_progress' ? 'selected' : ''}>In progress</option>
+          <option value="resolved" ${c.status === 'resolved' ? 'selected' : ''}>Resolved</option>
+        </select>
+      </span>
+      <span class="muted">${timeAgo(c.created_at)}</span>
+    `;
+    row.querySelector('select').addEventListener('change', (e) => updateStatus(c.id, e.target.value));
+    wrap.appendChild(row);
+  });
+}
+
+['filter-status', 'filter-priority', 'filter-category'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render)
+);
+
+requireStaff();
+
+supabaseClient
+  .channel('admin-complaints-changes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => loadComplaints())
+  .subscribe();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,109 @@
+{
+  "name": "LifeLine - Phase 2 - WiFi Gateway Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] }
+      },
+      "id": "3a333333-0000-4000-8000-000000000001",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-40, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.WIFI_GATEWAY_HEALTH_URL }}",
+        "options": {
+          "timeout": 8000
+        },
+        "onError": "continueErrorOutput"
+      },
+      "id": "3a333333-0000-4000-8000-000000000002",
+      "name": "Ping WiFi Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints?category=eq.Network&source=eq.auto_monitor&status=neq.resolved&select=id",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3a333333-0000-4000-8000-000000000003",
+      "name": "Check For Existing Open Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 420]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-none-open",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3a333333-0000-4000-8000-000000000004",
+      "name": "No Open Alert Yet?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [680, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-PROJECT-REF.supabase.co/rest/v1/complaints",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"category\": \"Network\",\n  \"description\": \"Automated monitor: WiFi gateway stopped responding to health checks.\",\n  \"location\": \"{{ $env.WIFI_GATEWAY_LOCATION_LABEL }}\",\n  \"status\": \"open\",\n  \"priority\": \"unassigned\",\n  \"source\": \"auto_monitor\"\n}",
+        "options": {}
+      },
+      "id": "3a333333-0000-4000-8000-000000000005",
+      "name": "Create Auto Complaint",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 420]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": { "main": [[{ "node": "Ping WiFi Gateway", "type": "main", "index": 0 }]] },
+    "Ping WiFi Gateway": {
+      "main": [
+        [],
+        [{ "node": "Check For Existing Open Alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check For Existing Open Alert": { "main": [[{ "node": "No Open Alert Yet?", "type": "main", "index": 0 }]] },
+    "No Open Alert Yet?": { "main": [[{ "node": "Create Auto Complaint", "type": "main", "index": 0 }], []] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

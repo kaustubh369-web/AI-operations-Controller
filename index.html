@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LifeLine — Hostel Operations Controller</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="brand" href="index.html"><span class="dot"></span> LifeLine</a>
+  <div class="topnav">
+    <span class="muted" style="font-family: var(--font-mono); font-size: 0.78rem;">HOSTEL OPS · PILOT WING</span>
+  </div>
+</div>
+
+<section class="pulse-hero">
+  <div class="eyebrow">AI Operation Controller</div>
+  <h1>Every hostel issue, seen, triaged, and tracked until it's actually fixed.</h1>
+  <p>Report it once. LifeLine's AI reads it, tags a priority, routes it to the right person, and won't let it go silent.</p>
+
+  <div class="pulse-line-wrap">
+    <svg viewBox="0 0 780 120" preserveAspectRatio="none">
+      <path class="pulse-path" d="M0,60 L160,60 L185,60 L200,20 L220,100 L240,40 L260,60 L320,60 L340,60 L355,25 L372,95 L390,60 L780,60" />
+      <path class="pulse-path-glow" d="M0,60 L160,60 L185,60 L200,20 L220,100 L240,40 L260,60 L320,60 L340,60 L355,25 L372,95 L390,60 L780,60" />
+    </svg>
+  </div>
+
+  <div class="systems-row">
+    <div class="system-chip"><span class="dot"></span> WiFi Gateway</div>
+    <div class="system-chip"><span class="dot"></span> Electrical &amp; Plumbing</div>
+    <div class="system-chip"><span class="dot"></span> Civil / Structural</div>
+    <div class="system-chip"><span class="dot"></span> AC &amp; Water Cooler</div>
+  </div>
+</section>
+
+<div class="container" style="max-width: 440px; margin-top: 20px; margin-bottom: 60px;">
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-login" onclick="showTab('login')">Sign in</button>
+      <button class="tab-btn" id="tab-register" onclick="showTab('register')">Register</button>
+    </div>
+
+    <!-- LOGIN -->
+    <form id="login-form">
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" required placeholder="you@hostel.edu" />
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" required placeholder="••••••••" />
+      <button class="btn-primary" type="submit">Sign in</button>
+      <div class="form-error" id="login-error"></div>
+    </form>
+
+    <!-- REGISTER -->
+    <form id="register-form" style="display:none;">
+      <label for="reg-name">Full name</label>
+      <input id="reg-name" required placeholder="Asha Verma" />
+      <label for="reg-room">Room number</label>
+      <input id="reg-room" required placeholder="B-214" />
+      <label for="reg-floor">Floor / Wing</label>
+      <input id="reg-floor" placeholder="B-Wing, 2nd Floor" />
+      <label for="reg-phone">Phone (optional)</label>
+      <input id="reg-phone" placeholder="+91 90000 00000" />
+      <label for="reg-email">Email</label>
+      <input id="reg-email" type="email" required placeholder="you@hostel.edu" />
+      <label for="reg-password">Password</label>
+      <input id="reg-password" type="password" required minlength="6" placeholder="At least 6 characters" />
+      <button class="btn-primary" type="submit">Create account</button>
+      <div class="form-error" id="register-error"></div>
+      <div class="form-success" id="register-success"></div>
+    </form>
+  </div>
+</div>
+
+<footer>LifeLine · AIOps for [Your Hostel Name] · Pilot phase</footer>
+
+<script src="config.js"></script>
+<script>
+function showTab(which) {
+  document.getElementById('tab-login').classList.toggle('active', which === 'login');
+  document.getElementById('tab-register').classList.toggle('active', which === 'register');
+  document.getElementById('login-form').style.display = which === 'login' ? 'block' : 'none';
+  document.getElementById('register-form').style.display = which === 'register' ? 'block' : 'none';
+}
+
+// Redirect signed-in users straight to the right dashboard
+async function routeIfLoggedIn() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) return;
+  const { data: profile } = await supabaseClient
+    .from('profiles')
+    .select('role')
+    .eq('id', session.user.id)
+    .single();
+  window.location.href = (profile && (profile.role === 'staff' || profile.role === 'warden'))
+    ? 'admin.html'
+    : 'dashboard.html';
+}
+routeIfLoggedIn();
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('login-error');
+  errorEl.textContent = '';
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) { errorEl.textContent = error.message; return; }
+  routeIfLoggedIn();
+});
+
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('register-error');
+  const successEl = document.getElementById('register-success');
+  errorEl.textContent = '';
+  successEl.textContent = '';
+
+  const full_name = document.getElementById('reg-name').value.trim();
+  const room_number = document.getElementById('reg-room').value.trim();
+  const floor = document.getElementById('reg-floor').value.trim();
+  const phone = document.getElementById('reg-phone').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  if (error) { errorEl.textContent = error.message; return; }
+
+  // If email confirmation is OFF, a session exists immediately and we can
+  // write the profile row now. If it's ON, this insert happens after the
+  // user confirms and signs in for the first time (call ensureProfile there).
+  if (data.session) {
+    const { error: profileError } = await supabaseClient.from('profiles').insert({
+      id: data.user.id,
+      full_name, room_number, floor, phone,
+      role: 'student'
+    });
+    if (profileError) { errorEl.textContent = profileError.message; return; }
+    window.location.href = 'dashboard.html';
+  } else {
+    successEl.textContent = 'Account created — check your email to confirm, then sign in.';
+    // stash profile details so dashboard.html can finish the insert on first login
+    sessionStorage.setItem('pending_profile', JSON.stringify({ full_name, room_number, floor, phone }));
+  }
+});
+</script>
+
+</body>
+</html>
