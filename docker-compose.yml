@@ -1,0 +1,20 @@
+# Spins up just the PostgreSQL database LifeLine needs.
+# Run: docker compose up -d
+# Then run the backend and frontend normally (see README.md).
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lifeline-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lifeline
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - lifeline_pgdata:/var/lib/postgresql/data
+
+volumes:
+  lifeline_pgdata:
