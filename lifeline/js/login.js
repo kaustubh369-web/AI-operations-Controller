@@ -36,7 +36,7 @@ loginForm.addEventListener("submit", async (e) => {
       .from("profiles")
       .select("role")
       .eq("id", data.user.id)
-      .single();
+      .select("*");
     if (profileError) throw profileError;
 
     if (wantsAdmin && profile.role !== "admin") {
