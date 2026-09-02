@@ -96,7 +96,11 @@ reportForm.addEventListener("submit", async (e) => {
     loadMyReports();
   } catch (err) {
     console.error(err);
-    showToast(err.message || "Could not submit report.", "error");
+    if (err.message && err.message.includes("RATE_LIMIT")) {
+      showToast("You've already submitted a report in the last hour. Please wait before submitting another.", "error");
+    } else {
+      showToast(err.message || "Could not submit report.", "error");
+    }
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = "Submit & run sandbox analysis";
